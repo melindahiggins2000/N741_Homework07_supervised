@@ -1,0 +1,73 @@
+---
+title: "Homework 07 Spring 2019"
+author: "Melinda Higgins"
+date: "April 12, 2019"
+output: html_document
+---
+
+## Homework 07 Spring 2019 - DUE April 17, 2019
+
+```{r setup, include=FALSE}
+# leave echo = TRUE to see code
+knitr::opts_chunk$set(echo = TRUE)
+
+# but suppress messages and warnings
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+-----
+
+## Course Material to Review
+
+Recall the NHANES dataset that we used in Lesson 12 on March 27, 2019, [https://htmlpreview.github.io/?https://github.com/vhertzb/ml_supervised/blob/master/ML_supervised.html](https://htmlpreview.github.io/?https://github.com/vhertzb/ml_supervised/blob/master/ML_supervised.html). And more on supervised learning on April 10, 2019, [https://htmlpreview.github.io/?https://github.com/vhertzb/more-supervised-learning/blob/master/More_Supervised_Learning.html](https://htmlpreview.github.io/?https://github.com/vhertzb/more-supervised-learning/blob/master/More_Supervised_Learning.html).
+
+Also review the logistic regression examples in Homework 6 assignment, see [https://htmlpreview.github.io/?https://github.com/melindahiggins2000/N741_Homework06_regression/blob/master/homework6.html](https://htmlpreview.github.io/?https://github.com/melindahiggins2000/N741_Homework06_regression/blob/master/homework6.html).
+
+## Assignment
+
+In the `NHANES` dataset there is a discrete variable called `Depressed` indicating whether each participant had "None", "Several", "Majority" or "AlmostAll" days in a month where the pariticpant felt down, depressed or hopeless. You are going to build a set of classifiers for this dependent variable. You may use any (set of) independent variable(s) you like except for the variable callsed `DaysMentHlthBad` (self-reported days that the participant's mental health was not good out of 30 days). 
+
+Run this R code to get started and create 2 groups that either were depressed "None" versus more than "None" - the new variable is `depressedYes`.
+
+```
+# load NHANES and dplyr packages
+library(NHANES)
+library(dplyr)
+
+# add depressedYes to NHANES dataset
+NHANES <- NHANES %>%
+  mutate(depressedYes <- Depressed != "None")
+  
+# check recoding that "Several" and "Most"
+# are coded as TRUE for depressedYes
+# and "None" are coded FALSE for depressedYes
+NHANES %>%
+  select(Depressed, depressedYes) %>%
+  with(table(Depressed, depressedYes))
+```
+
+PROBLEM 1: Run 4 classifier models for `depressedYes`:
+
+* logistic regression
+* decision tree, 
+* random forest, 
+* k-nearest neighbor
+    
+For each model do the following:
+
+(A) Build the classifier.
+(B) Report its effectiveness on the NHANES dataset.
+(C) Make an appropriate visualization of this model.
+(D) Interpret the results. What have you learned about people who self-report being depressed? 
+
+PROBLEM 2: Repeat problem 1 except now use the quantitative variable called `DaysMentHlthBad` as your outcome variable. Run 3 models:
+
+* multiple linear regression, 
+* regression tree, and 
+* random forest.
+
+And answer parts A, B, C, and D again for each model.
+
+**NOTE: `depressedYes` and `DaysMentHlthBad` are correlated but were 2 separate questions and are not perfectly aligned. The amount of missing data `NA's` are different between the 2 variables.** To learn more about the variables in the dataset, run `help(NHANES, package = "NHANES")`.
+
