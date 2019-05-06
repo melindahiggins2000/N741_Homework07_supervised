@@ -1,0 +1,483 @@
+---
+title: "Homework 07 Spring 2019 - ANSWER KEY"
+author: "Melinda Higgins"
+date: "April 12, 2019"
+output: html_document
+---
+
+## Homework 07 Spring 2019 - DUE April 17, 2019
+
+```{r setup, include=FALSE}
+# leave echo = TRUE to see code
+knitr::opts_chunk$set(echo = TRUE)
+
+# but suppress errors, messages and warnings
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+```
+
+-----
+
+## Course Material to Review
+
+Recall the NHANES dataset that we used in Lesson 12 on March 27, 2019, [https://htmlpreview.github.io/?https://github.com/vhertzb/ml_supervised/blob/master/ML_supervised.html](https://htmlpreview.github.io/?https://github.com/vhertzb/ml_supervised/blob/master/ML_supervised.html). And more on supervised learning on April 10, 2019, [https://htmlpreview.github.io/?https://github.com/vhertzb/more-supervised-learning/blob/master/More_Supervised_Learning.html](https://htmlpreview.github.io/?https://github.com/vhertzb/more-supervised-learning/blob/master/More_Supervised_Learning.html).
+
+Also review the logistic regression examples in Homework 6 assignment, see [https://htmlpreview.github.io/?https://github.com/melindahiggins2000/N741_Homework06_regression/blob/master/homework6.html](https://htmlpreview.github.io/?https://github.com/melindahiggins2000/N741_Homework06_regression/blob/master/homework6.html).
+
+## Assignment
+
+In the `NHANES` dataset there is a discrete variable called `Depressed` indicating whether each participant had "None", "Several", "Majority" or "AlmostAll" days in a month where the pariticpant felt down, depressed or hopeless. You are going to build a set of classifiers for this dependent variable. You may use any (set of) independent variable(s) you like except for the variable callsed `DaysMentHlthBad` (self-reported days that the participant's mental health was not good out of 30 days). 
+
+Run this R code to get started and create 2 groups that either were depressed "None" versus more than "None" - the new variable is `depressedYes`.
+
+```{r}
+# load NHANES and dplyr packages
+library(NHANES)
+library(dplyr)
+
+# add depressedYes to NHANES dataset
+# ======================================
+# TYPO - M. Higgins - Inside mutate
+# you need to use an = and not the assign <- operator
+# NHANES <- NHANES %>%
+#   mutate(depressedYes <- Depressed != "None")
+# ======================================
+# CORRECTED
+NHANES <- NHANES %>%
+  mutate(depressedYes = Depressed != "None")
+  
+# check recoding that "Several" and "Most"
+# are coded as TRUE for depressedYes
+# and "None" are coded FALSE for depressedYes
+NHANES %>%
+  select(Depressed, depressedYes) %>%
+  with(table(Depressed, depressedYes))
+```
+
+PROBLEM 1: Run 4 classifier models for `depressedYes`:
+
+* logistic regression
+* decision tree, 
+* random forest, 
+* k-nearest neighbor
+    
+For each model do the following:
+
+(A) Build the classifier.
+(B) Report its effectiveness on the NHANES dataset.
+(C) Make an appropriate visualization of this model.
+(D) Interpret the results. What have you learned about people who self-report being depressed? 
+
+--- 
+
+NOTE: I (Melinda Higgins) created a subset with only a handful of potential variables as possibly associated with `depressedYes`. I used this subset for all of problem 1 below. Your variable choices will probably be different.
+
+```{r}
+nhdata <- NHANES %>%
+  select(depressedYes, Age, Education, MaritalStatus,
+         Poverty, BMI, HealthGen, SleepHrsNight,
+         PhysActive)
+```
+
+## ANSWER KEY - LOGISTIC REGRESSION
+
+### PROBLEM 1: ANSWER KEY Logistic Regression (A) Build Classifier
+
+Run logistic regression model, use `summary()` function to view model results. And print odds ratios using `exp(coef())`.
+
+```{r}
+lrmod <- glm(depressedYes ~ ., data=nhdata, family=binomial)
+summary(lrmod)
+exp(coef(lrmod))
+```
+
+### PROBLEM 1: ANSWER KEY Logistic Regression (B) Effectiveness
+
+One way to understand how well a logistic regression model did is to look at the "confusion matrix" or rather how many true and false positives and negatives were predicted - ideally all the classification should be perfect.
+
+For this evaluation, I used a threhold of 0.5, which is a good place to start.
+
+Original Numbers of Depressed and Not
+
+```{r}
+table(nhdata$depressedYes)
+```
+
+Model predictions
+
+```{r}
+# look at the predicted probabilities
+# review the help for predict.glm
+lrmod.predict <- predict(lrmod, newdata=nhdata, type="response")
+table(lrmod.predict > 0.50, nhdata$depressedYes)
+```
+
+So, the model correctly predicted 4612/5246 = `r paste(4612*100/5246, "%")` non-depressed subjects, but only 113/1427 = `r paste(113*100/1427, "%")` of depressed subjects, at a threshold of 0.5.
+
+A better way is to compute the AUC - see the code below which computes the AUC and plots the curve to help "visualize" the model results.
+
+### PROBLEM 1: ANSWER KEY Logistic Regression (C) Visualization of model
+
+```{r}
+# Note this code fails for missing data in outcomes
+# and in the dataset, use this code to keep only complete cases
+
+nhdata.complete <- na.omit(nhdata)
+
+library(ROCR)
+p <- predict(lrmod, newdata=nhdata.complete, 
+             type="response")
+pr <- prediction(p, as.numeric(nhdata.complete$depressedYes))
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+abline(a=0, b=1, col="red")
+
+# the area under this curve compared
+# to the y=x reference line
+# tells you how well the model is predicting
+# and AUC of 0.5 is a bad model - no better
+# than flipping a coin
+# AUC of 0.6-0.7 is still not very good
+# AUC of 0.7-0.8 is pretty good
+# AUC of 0.8-0.9 is good
+# AUC 0.9-1.0 is great 
+
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+
+### PROBLEM 1: ANSWER KEY Logistic Regression (D) Interpret Classifier
+
+So, this model isn't horrible, AUC = `r auc`, but the model could be better - we should refine our variable selection and maybe include other predictors.
+
+--- 
+
+## ANSWER KEY - DECISION TREE
+
+### PROBLEM 1: ANSWER KEY Decision Tree (A) Build Classifier
+
+```{r}
+library(rpart)
+fitnh <- rpart(depressedYes ~ ., data=nhdata)
+printcp(fitnh) # Display the results
+plotcp(fitnh) # Visualize cross-validation results
+summary(fitnh) # Detailed summary of fit
+```
+
+### PROBLEM 1: ANSWER KEY Decision Tree (B) Effectiveness
+
+In the `printcp()` output above, we can see that the `x error` for the final split was 0.94 which is still high, ideally we'd like to see this lower. It is noted that this tree only kept `HealthGen` and `MaritalStatus` in the model, so more variables are probably needed.
+
+### PROBLEM 1: ANSWER KEY Decision Tree (C) Visualization of model
+
+```{r}
+# plot tree
+plot(fitnh, uniform = TRUE, compress = FALSE)
+text(fitnh, use.n = TRUE, all = TRUE, cex = 1.5)
+```
+
+### PROBLEM 1: ANSWER KEY Decision Tree (D) Interpret Classifier
+
+Given the model only kept 2 variables and the x-error was still high, more variables will be needed to refine this classification tree further.
+
+---
+
+## ANSWER KEY - RANDOM FOREST
+
+### PROBLEM 1: ANSWER KEY Random Forest (A) Build Classifier
+
+```{r}
+library(RColorBrewer)
+library(plot3D)
+library(parallel)
+library(randomForestSRC)
+library(ggRandomForests)
+
+set.seed(131)
+# Random Forest for the nhdata subset
+# NOTE: The dataset must be a simple data.frame
+# Add as.data.frame(nhdata) for this to work with rfsrc()
+fitallrf <- rfsrc(depressedYes ~ ., 
+                  data = as.data.frame(nhdata), 
+                  ntree = 100, tree.err=TRUE)
+
+# view the results
+fitallrf
+```
+
+### PROBLEM 1: ANSWER KEY Random Forest (B) Effectiveness
+
+This isn't too bad, the percent variance explained was 45.13 and the error rate was only 0.09.
+
+### PROBLEM 1: ANSWER KEY Random Forest (C) Visualization of model
+
+```{r}
+# Plot the VIMP rankins of independent variables
+plot(gg_vimp(fitallrf))
+```
+
+This plot shows us the relative importance of the predictors retained in the model, the top 3 are poverty, marital status and general health, followed by age, bmi, sleep, education and whether someone was physically active.
+
+### PROBLEM 1: ANSWER KEY Random Forest (D) Interpret Classifier
+
+The error rate was lower for the random forest than the classifcation and regression tree above and for the logistic regression.
+
+---
+
+Note: Dr. Hertzberg covered KNNs in her presentation [https://htmlpreview.github.io/?https://github.com/vhertzb/more-supervised-learning/blob/master/More_Supervised_Learning.html](https://htmlpreview.github.io/?https://github.com/vhertzb/more-supervised-learning/blob/master/More_Supervised_Learning.html).
+
+## ANSWER KEY - K-NEAREST NEIGHBOR (KNN)
+
+### PROBLEM 1: ANSWER KEY K-Nearest Neighbor (KNN) (A) Build Classifier
+
+```{r}
+library(class)
+
+# no missing values allows, so use complete data as we fixed above
+nhdata.complete <- na.omit(nhdata)
+
+# and all factors have to be converted to 
+# numeric first for knn to work
+nhdata.complete$Education <- as.numeric(nhdata.complete$Education)
+nhdata.complete$MaritalStatus <- as.numeric(nhdata.complete$MaritalStatus)
+nhdata.complete$HealthGen <- as.numeric(nhdata.complete$HealthGen)
+nhdata.complete$PhysActive <- as.numeric(nhdata.complete$PhysActive)
+
+# Apply knn procedure to predict depressedYes
+# Let's try different values of k to see how that affects performance
+knn.1 <- knn(train = nhdata.complete, test = nhdata.complete, 
+             cl = nhdata.complete$depressedYes, k = 1)
+
+knn.3 <- knn(train = nhdata.complete, test = nhdata.complete, 
+             cl = nhdata.complete$depressedYes, k = 3)
+
+knn.5 <- knn(train = nhdata.complete, test = nhdata.complete, 
+             cl = nhdata.complete$depressedYes, k = 5)
+
+knn.20 <- knn(train = nhdata.complete, test = nhdata.complete, 
+              cl = nhdata.complete$depressedYes, k = 20)
+```
+
+### PROBLEM 1: ANSWER KEY K-Nearest Neighbor (KNN) (B) Effectiveness
+
+```{r}
+# Calculate the percent predicted correctly
+100*sum(nhdata.complete$depressedYes == knn.1)/length(knn.1)
+
+100*sum(nhdata.complete$depressedYes == knn.3)/length(knn.3)
+
+100*sum(nhdata.complete$depressedYes == knn.5)/length(knn.5)
+
+100*sum(nhdata.complete$depressedYes == knn.20)/length(knn.20)
+```
+
+The percentage declines with increasing neighbours considered.
+
+Also consider success rates:
+
+```{r}
+# Another way to look at success rate against increasing k
+
+table(knn.1, nhdata.complete$depressedYes)
+
+table(knn.3, nhdata.complete$depressedYes)
+
+table(knn.5, nhdata.complete$depressedYes)
+
+table(knn.20, nhdata.complete$depressedYes)
+```
+
+The KNN with k=1 did the best.
+
+### PROBLEM 1: ANSWER KEY K-Nearest Neighbor (KNN) (C) Visualization of model
+
+**SKIP** we didn't cover this very well in class
+
+### PROBLEM 1: ANSWER KEY K-Nearest Neighbor (KNN) (D) Interpret Classifier
+
+The KNN with k=1 didn't give any errors but it didn't give us any insights either.
+
+--- 
+
+PROBLEM 2: Repeat problem 1 except now use the quantitative variable called `DaysMentHlthBad` as your outcome variable. Run 3 models:
+
+* multiple linear regression, 
+* regression tree, and 
+* random forest.
+
+And answer parts A, B, C, and D again for each model.
+
+**NOTE: `depressedYes` and `DaysMentHlthBad` are correlated but were 2 separate questions and are not perfectly aligned. The amount of missing data `NA's` are different between the 2 variables.** To learn more about the variables in the dataset, run `help(NHANES, package = "NHANES")`.
+
+## ANSWER KEY - MULTIPLE LINEAR REGRESSION
+
+### PROBLEM 2: ANSWER KEY Multiple Linear Regression (A) Build Classifier _(well in this case the linear model, so building a "predictor" might be better verbiage)_
+
+```{r}
+# recreate dataset used above, but include DaysMentHlthBad
+# instead of depressedYes
+nhdata <- NHANES %>%
+  select(DaysMentHlthBad, Age, Education, MaritalStatus,
+         Poverty, BMI, HealthGen, SleepHrsNight,
+         PhysActive)
+
+lm1 <- lm(DaysMentHlthBad ~ ., data=nhdata)
+summary(lm1)
+```
+
+### PROBLEM 2: ANSWER KEY Multiple Linear Regression (B) Effectiveness
+
+Given the variables I chose above, it looks like HealthGen is very significant and might even be sort of a proxy for the outcome. We may want to exclude this variable if it basically the same (theoretically) as the outcome `DaysMentHlthBad`.
+
+That said, even with the significant predictors, the adjusted R2 of the whole is only 0.081, so 8.1%, which is pretty small - this is a small-to-moderate effect size _(approximately R2 = .02 is "small", R2 = .09-12 is "moderate" and R2 = .25 is "large")_, learn more by reading Cohen, Jacob (1988) Statistical Power Analysis for the Behavioral Sciences, Lawrence Erlbaum Associates, Hillsdale, New Jersey. 
+
+--- 
+
+**Keep in mind that this dataset has over 5000+ subjects which is a large dataset, so this large sample size is also driving the smaller p-values. It is important to always evaluate effect sizes and theoretical relevance in addition to p-values and statistical significance.**
+
+--- 
+
+### PROBLEM 2: ANSWER KEY  Multiple Linear Regression (C) Visualization of model
+
+**Distribution of Outcome**
+
+When evaluating how well a model does and how the diagnostic plots look, it is always good to keep in mind the distribution of the outcome variable which will influence all of these. This outcome `DaysMentHlthBad` is basically a "count" variable - these typically have an underlying _Poisson_ or _Negative Binomial_ distribution and not _Gaussian_/_Normal_ distribution. However, the sample size is really large 5000+ which does allow the Centeral Limit Theorem to play a role in overcoming the non-normality of the distribution, so a linear regression model is ok here. 
+
+Although, when working with outcomes that truly come from a "count-based" data generating function, performing a Poisson or Negative Binomial regression would be better. Learn more about the `glm()` function with `family = poisson` from base `R` or the `glm.nb()` function for Negative Binomial from the `MASS` package. Learn more about Poisson Regression at  [https://stats.idre.ucla.edu/r/dae/poisson-regression/](https://stats.idre.ucla.edu/r/dae/poisson-regression/) and about Negative Binimial Regression at [https://stats.idre.ucla.edu/r/dae/negative-binomial-regression/](https://stats.idre.ucla.edu/r/dae/negative-binomial-regression/).
+
+```{r}
+hist(nhdata$DaysMentHlthBad)
+```
+
+**Model Plots**
+
+Use the base `R` function `plot()` to get diagnostic plots of the model object `lm1`.
+
+```{r}
+par(mfrow=c(2,2))
+plot(lm1)
+par(mfrow=c(1,1))
+```
+
+So, as you can see there is obvious skewness to these diagnostic plots.
+
+**Residual Plots Using `car` Package functions**
+
+```{r}
+library(car)
+
+#get the residual plots
+residualPlots(lm1)
+```
+
+**Residuals versus Predicted**
+
+```{r}
+plot(lm1$fitted.values, lm1$residuals)
+```
+
+**QQ-Plot of Residuals**
+
+```{r}
+car::qqPlot(lm1)
+```
+
+### PROBLEM 2: ANSWER KEY Multiple Linear Regression (D) Interpret Classifier
+
+So, given these variables chosen here, the model is a poor predictor of the number of mental health bad since the R2 was pretty small. Also, the choice of a linear regression model, which assume a normally distributed outcome, is also not the best. A Poisson or Negative Binomial regression approach would be better.
+
+## ANSWER KEY - REGRESSION TREE
+
+It is worth noting that regression trees while not strictly linear still assumes a normally distributed outcome. Again the sample size helps with assumptions of the Central Limit Theorem, but admittedly the underlying outcome is a count-based variable.
+
+### PROBLEM 2: ANSWER KEY Regression Tree (A) Build Classifier
+
+**Build Model**
+
+```{r}
+library(rpart)
+rtree1 <- rpart(DaysMentHlthBad ~ ., data=nhdata)
+```
+
+### PROBLEM 2: ANSWER KEY Regression Tree (B) Effectiveness
+
+**View results**
+
+```{r}
+rtree1
+printcp(rtree1)
+```
+
+Notice that only `HealthGen` and `SleepHrsNight` are used in this regression tree model.
+
+### PROBLEM 2: ANSWER KEY Regression Tree (C) Visualization of model
+
+```{r}
+plotcp(rtree1)
+```
+
+The relative error is still high after 3 splits.
+
+```{r}
+plot(rtree1, uniform = TRUE, compress = FALSE, 
+     main = "Regression Tree for NHANES Dataset")
+text(rtree1, use.n = TRUE, all = TRUE, cex = 0.5)
+```
+
+### PROBLEM 2: ANSWER KEY Regression Tree (D) Interpret Classifier
+
+Given the relative errors are still high after 3 splits, this does not appear to be a very good classifer/predictor of the number of days mental health bad. This is similar to the poor model results of the linear regression model above.
+
+---
+
+**EXTRA TIDBIT ON NON-PARAMETRIC REGRESSION TREES**
+
+```{r}
+# NOTE: data must be complete, no missing data allowed.
+nhdata.complete <- na.omit(nhdata)
+
+library(party)
+ctree1 <- ctree(DaysMentHlthBad ~ ., data=nhdata.complete)
+plot(ctree1, main = "Conditional Inference Tree for Days Mental Health Bad")
+```
+
+At first glance, this non-parametric approach regression tree model seems better - it includes many more variables in the model.
+
+---
+
+## ANSWER KEY - RANDOM FOREST
+
+### PROBLEM 2: ANSWER KEY Random Forest (A) Build Classifier
+
+```{r}
+library(randomForestSRC)
+set.seed(131)
+# Random Forest 
+fitrf <- rfsrc(DaysMentHlthBad ~ ., 
+               data=as.data.frame(nhdata.complete), 
+               ntree = 100, tree.err=TRUE)
+
+# view the results
+fitrf
+```
+
+### PROBLEM 2: ANSWER KEY Random Forest (B) Effectiveness
+
+This model did pretty well, the error rate was only about 33-34% and the variance explained is much better than the linear regression model - the random forest explained 46.45%.
+
+### PROBLEM 2: ANSWER KEY Random Forest (C) Visualization of model
+
+```{r}
+library(ggRandomForests)
+
+# Plot the VIMP rankins of independent variables
+plot(gg_vimp(fitallrf))
+```
+
+The variable importance shows `Poverty` at the top followed by `MaritalStatus` and `HealthGen`.
+
+### PROBLEM 2: ANSWER KEY Random Forest (D) Interpret Classifier
+
+The random forest approach does do better than the linear model and the usual `rpart()` regression tree. The non-parametric `ctree()` did better and the random forest did better still. 
